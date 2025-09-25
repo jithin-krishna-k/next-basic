@@ -47,3 +47,18 @@ export async function login(prevState, formData) {
 
   redirect("/dashboard");
 }
+
+export async function logout() {
+  const cookieStore = await cookies();
+  
+  // Remove the cookie
+  cookieStore.set("session-token", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+
+  redirect("/auth/login"); // redirect user to login or home page
+}
