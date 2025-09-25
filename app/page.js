@@ -1,16 +1,12 @@
-"use client";
+import CheckSession from "@/components/CheckSession";
+import { getSession } from "./lib/session";
 
-import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
+export default async function Home() {
 
-export default function Home() {
-  const router = useRouter();
-
+    const session = await getSession();
   return (
     <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <Button onClick={() => router.push("/auth/login")}>
-        Login
-      </Button>
+      <CheckSession session={session}/>
     </div>
   );
 }

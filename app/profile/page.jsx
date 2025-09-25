@@ -1,15 +1,11 @@
-'use client'
+import { getSession } from "../lib/session";
 
-import { useAuth } from '../context/AuthContext'
-
-export default function Profile() {
-  const { user, login, logout } = useAuth()
+export default async function Profile() {
+  const session = await getSession();
 
   return (
-    <div>
-      <h1>Hello, {user ? user.name : 'Guest'}</h1>
-      {!user && <button onClick={() => login({ name: 'John' })}>Login</button>}
-      {user && <button onClick={logout}>Logout</button>}
+    <div className="flex justify-center items-center h-screen">
+      <h1 className=" font-bold text-md">Hello, {session.email}</h1>
     </div>
-  )
+  );
 }

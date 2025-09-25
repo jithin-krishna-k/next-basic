@@ -15,5 +15,3 @@ model user {
   name      String?
   createdAt DateTime @default(now())
 }
-
-

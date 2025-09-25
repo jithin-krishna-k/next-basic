@@ -8,13 +8,14 @@ import { useAuth } from '@/app/context/AuthContext';
 export default function UserList() {
   const { logout } = useAuth();
 
+
   const { data, error, isLoading } = useSWR('/api/users', fetcher, {
     refreshInterval: 10000, //10s
     revalidateOnFocus: true,
   });
 
   mutate('/api/users'); 
-  console.log(">>>",{data});
+  // console.log(">>>",{data});
   
 
   if (isLoading) return <p>Loading users...</p>;
