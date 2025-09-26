@@ -1,17 +1,323 @@
+// schema.prisma
 generator client {
   provider = "prisma-client-js"
-  output   = "../app/generated/prisma"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "mysql" // or "mysql" / "sqlite"
   url      = env("DATABASE_URL")
 }
 
-model user {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique(map: "User_email_key")
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
   password  String
-  name      String?
+  role      Role     @default(USER) // USER | CONSULTANT | ADMIN
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consultantProfile Consultant?
+  bookings          Booking[]
+}
+
+model Consultant {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String   @unique
+  title          String
+  bio            String
+  profilePicture String?
+  rating         Float?   @default(0)
+  reviewsCount   Int?     @default(0)
+  experience     Int
+  adminApproved  Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  services     Service[]
+  availability Availability[]
+  paymentInfo  PaymentInfo?
+  bookings     Booking[]
+  skills       ConsultantSkill[]
+
+  Activity Activity[]
+
+  Package Package[]
+
+  Transaction Transaction[]
+
+  Payout Payout[]
+
+  PayoutSetting PayoutSetting[]
+}
+
+model Skill {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  consultants ConsultantSkill[]
+}
+
+model ConsultantSkill {
+  id           String     @id @default(cuid())
+  consultant   Consultant @relation(fields: [consultantId], references: [id])
+  consultantId String
+  skill        Skill      @relation(fields: [skillId], references: [id])
+  skillId      String
+
+  @@unique([consultantId, skillId])
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  consultant   Consultant    @relation(fields: [consultantId], references: [id])
+  consultantId String
+  title        String
+  description  String
+  price        Float
+  status       ServiceStatus @default(DRAFT)
+  duration     Int // in minutes
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  Booking      Booking[]
+
+  PackageService PackageService[]
+}
+
+enum ServiceStatus {
+  DRAFT // consultant just saved it
+  PENDING_APPROVAL // consultant submitted for admin review
+  ACTIVE // approved & visible
+  INACTIVE // temporarily disabled
+  ARCHIVED // permanently hidden
+}
+
+model Package {
+  id            String           @id @default(cuid())
+  consultant    Consultant       @relation(fields: [consultantId], references: [id])
+  consultantId  String
+  title         String
+  description   String?
+  sessionsCount Int // total sessions in the package
+  discountPct   Float // discount %
+  originalPrice Float
+  finalPrice    Float
+  services      PackageService[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model PackageService {
+  id        String  @id @default(cuid())
+  package   Package @relation(fields: [packageId], references: [id])
+  packageId String
+  service   Service @relation(fields: [serviceId], references: [id])
+  serviceId String
+}
+
+model Activity {
+  id           String       @id @default(cuid())
+  consultant   Consultant   @relation(fields: [consultantId], references: [id])
+  consultantId String
+  type         ActivityType
+  message      String // e.g. "Profile viewed by potential client from Mumbai"
+  metadata     Json? // store extra details (client name, serviceId, rating)
+  createdAt    DateTime     @default(now())
+}
+
+enum ActivityType {
+  PROFILE_VIEW
+  SERVICE_VIEW
+  BOOKING_INQUIRY
+  BOOKING_CONFIRMED
+  REVIEW_RECEIVED
+  BOOKING_CANCELLED
+  DISPUTE_OPENED
+}
+
+model Availability {
+  id           String             @id @default(cuid())
+  consultant   Consultant         @relation(fields: [consultantId], references: [id])
+  consultantId String
+  day          String
+  slots        AvailabilitySlot[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+}
+
+model AvailabilitySlot {
+  id             String       @id @default(cuid())
+  availability   Availability @relation(fields: [availabilityId], references: [id])
+  availabilityId String
+  startTime      String // e.g., "10:00"
+  endTime        String // e.g., "11:00"
+}
+
+model PaymentInfo {
+  id           String     @id @default(cuid())
+  consultant   Consultant @relation(fields: [consultantId], references: [id])
+  consultantId String     @unique
+  bankAccount  String
+  upiId        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Transaction {
+  id           String            @id @default(cuid())
+  booking      Booking?          @relation(fields: [bookingId], references: [id])
+  bookingId    String?
+  consultant   Consultant        @relation(fields: [consultantId], references: [id])
+  consultantId String
+  sessionTitle String
+  clientName   String
+  sessionDate  DateTime
+  grossAmount  Float
+  commission   Float
+  tax          Float
+  netAmount    Float
+  status       TransactionStatus
+  createdAt    DateTime          @default(now())
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  user           User          @relation(fields: [userId], references: [id])
+  userId         String
+  consultant     Consultant    @relation(fields: [consultantId], references: [id])
+  consultantId   String
+  service        Service       @relation(fields: [serviceId], references: [id])
+  serviceId      String
+  date           DateTime
+  timeSlot       String // e.g., "12:04 PM"
+  duration       Int // in minutes
+  fee            Float // session fee
+  status         BookingStatus @default(PENDING)
+  rating         Int? // client rating
+  payoutStatus   PayoutStatus  @default(PENDING)
+  dispute        Boolean       @default(false)
+  CancelledBy    String
+  refundedAmount Float? // Amount refunded if cancelled
+
+  // Session details
+  notes           String? // Consultant notes
+  resources       Json? // Array of file info [{name, url, size}]
+  clientReview    String? // Review left by client
+  reviewDate      DateTime? // When the review was posted
+  consultantReply String? // Reply to review
+
+  // Billing breakdown
+  platformCommission Float? // e.g., 15% of fee
+  gst                Float? // GST amount
+  netAmount          Float? // fee - commission - GST
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Dispute Dispute[]
+  events  BookingEvent[]
+
+  Transaction Transaction[]
+}
+
+model Payout {
+  id           String       @id @default(cuid())
+  consultant   Consultant   @relation(fields: [consultantId], references: [id])
+  consultantId String
+  amount       Float
+  method       PayoutMethod
+  sessionCount Int
+  status       PayoutStatus
+  createdAt    DateTime     @default(now())
+}
+
+model PayoutSetting {
+  id            String       @id @default(cuid())
+  consultant    Consultant   @relation(fields: [consultantId], references: [id])
+  consultantId  String
+  method        PayoutMethod @default(BANK_TRANSFER) // e.g., BANK_TRANSFER, PAYTM, RAZORPAY
+  accountHolder String
+  accountNumber String // can be masked in frontend
+  bankName      String?
+  ifscCode      String?
+  autoPayout    Boolean      @default(false)
+  minAmount     Float        @default(1000) // minimum payout
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Dispute {
+  id         String   @id @default(cuid())
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  bookingId  String
+  reason     String
+  createdAt  DateTime @default(now())
+  resolved   Boolean  @default(false)
+  resolution String? // optional text after dispute is resolved
+}
+
+model BookingEvent {
+  id          String      @id @default(cuid())
+  booking     Booking     @relation(fields: [bookingId], references: [id])
+  bookingId   String
+  type        EventType
+  actor       EventActor?
+  amount      Float? // e.g., refunded amount
+  description String? // optional text
+  createdAt   DateTime    @default(now())
+}
+
+model Support {
+  id String @id @default(cuid())
+}
+
+enum EventType {
+  CREATED
+  CONFIRMED
+  CANCELLED
+  NO_SHOW
+  IN_PROGRESS
+  COMPLETED
+  DISPUTE
+  REFUND
+}
+
+enum EventActor {
+  CLIENT
+  CONSULTANT
+  SYSTEM
+  PLATFORM
+}
+
+enum Role {
+  USER
+  CONSULTANT
+  ADMIN
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  LOCKED
+}
+
+enum TransactionStatus {
+  PENDING
+  SETTLED
+  REFUNDED
+  DISPUTED
+}
+
+enum PayoutMethod {
+  BANK_TRANSFER
+  PAYTM
+  RAZORPAY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
 }
